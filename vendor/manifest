@@ -1,0 +1,12 @@
+{
+	"version": 0,
+	"dependencies": [
+		{
+			"importpath": "github.com/google/go-querystring/query",
+			"repository": "https://github.com/google/go-querystring",
+			"revision": "547ef5ac979778feb2f760cdb5f4eae1a2207b86",
+			"branch": "master",
+			"path": "/query"
+		}
+	]
+}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"syscall"
 
 	"app"
 	"config"
@@ -32,61 +31,50 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Use default location if none given
+	cfg, err := loadConfig()
+	if err != nil {
+		logger.Error("msg", "The configuration could not be loaded", "error", err, "path", conf)
+		os.Exit(1)
+	}
+
+	// Start service
+	qubot, err := qubot.New(cfg)
+	if err != nil {
+		logger.Error("msg", "Qubot could not be started", "error", err)
+		os.Exit(1)
+	}
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt)
+	select {
+	case <-sigChan:
+		logger.Info("msg", "Shutting down Qubot")
+		qubot.Close()
+		logger.Info("msg", "Qubot was shut down successfully. ¡Adiós!")
+	case <-qubot.Quit:
+		logger.Info("msg", "Qubot stopped unexpectedly")
+	}
+}
+
+func loadConfig() (*config.Config, error) {
+	cfg := config.DefaultConfig
+
 	if conf == "" {
 		if cfgfile, err := config.File(); err == nil {
 			conf = cfgfile
 		}
 	}
 
-	cfg := config.DefaultConfig
 	if conf != "" {
 		var err error
 		cfg, err = config.Load(conf)
 		if err != nil {
-			logger.Error("msg", err)
-			os.Exit(1)
+			return nil, err
 		}
 		logger.Debug("msg", "Using config file", "path", conf)
 	}
 
-	// Wait for reload or termination signals. Start the handler for SIGHUP
-	// as early as possible, but ignore it until we are ready to handle
-	// reloading our config.
-	hup := make(chan os.Signal)
-	hupReady := make(chan bool)
-	signal.Notify(hup, syscall.SIGHUP)
-	go func() {
-		<-hupReady
-		for {
-			select {
-			case <-hup:
-			}
-			// reloadConfig(cfg.configFile, reloadables...)
-			reloadConfig()
-		}
-	}()
-
-	_, err := qubot.New(cfg)
-	if err != nil {
-		logger.Error("msg", err)
-	}
-
-	// Wait for reload or termination signals.
-	close(hupReady) // Unblock SIGHUP handler.
-
-	term := make(chan os.Signal)
-	signal.Notify(term, os.Interrupt, syscall.SIGTERM)
-	select {
-	case <-term:
-		logger.Warn("msg", "Received SIGTERM, exiting gracefully...")
-	}
-
-	logger.Info("msg", "See you next time!")
-}
-
-func reloadConfig() {
-	logger.Error("msg", "reloadConfig() is not implemented yet!")
+	return cfg, nil
 }
 
 func printVersion() {

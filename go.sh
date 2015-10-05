@@ -3,6 +3,12 @@
 # Wrapper for the Go tool that I use when gb doesn't provideme something I
 # need, like bulding or testing the sources with the race detector.
 
+# Examples:
+# ./go.sh install -v -x -race ./src/...
+# ./go.sh build -v -x -race ./src/...
+# ./go.sh test -v -x -race ./src/...
+
+
 SOURCE="${BASH_SOURCE[0]}"
 while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
   DIR="$( cd -P "$( dirname "$SOURCE" )" && pwd )"

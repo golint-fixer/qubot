@@ -48,9 +48,7 @@ func main() {
 	signal.Notify(sigChan, os.Interrupt)
 	select {
 	case <-sigChan:
-		logger.Info("msg", "Shutting down Qubot")
 		qubot.Close()
-		logger.Info("msg", "Qubot was shut down successfully. ¡Adiós!")
 	case <-qubot.Quit:
 		logger.Info("msg", "Qubot stopped unexpectedly")
 	}

@@ -12,13 +12,22 @@ import (
 
 // Qubot represents the bot service.
 type Qubot struct {
-	config   *config.Config
-	db       *DB
+	config *config.Config
+	db     *DB
+	wg     sync.WaitGroup
+	client *slack.Client
+
+	// shutdown is a channel used to coordinate shutting down all the
+	// goroutines in this service cleanly.
 	shutdown chan struct{}
-	errors   chan error
-	Quit     chan struct{}
-	wg       sync.WaitGroup
-	client   *slack.Client
+
+	// errors is a channel used internally to coordinate management of
+	// errors, though this is something I'm not sure yet if I'll be using.
+	errors chan error
+
+	// Quit is a channel that we close when Qubot finishes. It is exported
+	// so others can tell when we quit.
+	Quit chan struct{}
 }
 
 // New starts a new instance of Qubot and returns it. It doesn't block but move
@@ -44,27 +53,17 @@ func New(config *config.Config) (*Qubot, error) {
 }
 
 func (q *Qubot) start() {
-	q.wg.Add(3)
+	q.wg.Add(2)
 
 	// Listening on the errors channel.
 	go func() {
-		select {
-		case <-q.shutdown:
-			q.wg.Done()
-			return
-		case <-q.errors:
-			q.wg.Done()
-			q.Close()
-			return
-		}
-	}()
-
-	// Chatroom message processing goroutine.
-	go func() {
 		for {
 			select {
+			case err := <-q.errors:
+				// TODO - You have an error, do something about it.
+				// Error with no recovery could: q.wg.Done(); q.Close()
+				logger.Error("msg", "Error handler received an error", "error", err)
 			case <-q.shutdown:
-				// Chatroom shutting down.
 				q.wg.Done()
 				return
 			}
@@ -76,15 +75,18 @@ func (q *Qubot) start() {
 		client := slack.New(q.config.Slack.Key)
 		q.client = client
 
-		// Test authentication
+		// Test authentication and exit if failed.
 		if resp, err := q.client.AuthTest(); err == nil {
 			logger.Info("msg", "Authentication request test succeeded", "url", resp.URL)
 		} else {
 			logger.Error("msg", "Authentication request test failed")
 			q.errors <- err
 			q.wg.Done()
+			q.Close()
 			return
 		}
+
+		defer q.wg.Done()
 
 		rtm := client.NewRTM()
 		go rtm.ManageConnection()
@@ -92,11 +94,13 @@ func (q *Qubot) start() {
 		for {
 			select {
 			case event := <-rtm.IncomingEvents:
-				q.processIncomingEvent(&event)
+				// Process the incoming event in a new goroutine
+				// so we can keep listening.
+				q.wg.Add(1)
+				go q.processIncomingEvent(&event)
 			case <-q.shutdown:
 				logger.Info("msg", "Disconnecting from Slack RTM")
 				rtm.Disconnect()
-				q.wg.Done()
 				return
 			}
 		}
@@ -105,20 +109,32 @@ func (q *Qubot) start() {
 
 // processIncomingEvent processes incoming events from the real time API. We are
 // not listening to all the types of events, e.g. slack.HelloEvent,
-// slack.ConnectedEvent, slack.PresenceChangeEvent, slack.LatencyReport,
-// slack.RTMError, slack.InvalidAuthEvent
+// slack.ConnectedEvent, slack.PresenceChangeEvent, slack.LatencyReport
 func (q *Qubot) processIncomingEvent(event *slack.RTMEvent) {
+	defer q.wg.Done()
 	// Remember that the variable declared in the type switch will have the
 	// corresponding type in each clause.
 	switch e := event.Data.(type) {
+	case *slack.ConnectedEvent:
+		logger.Info("msg", "Connected!")
 	case *slack.MessageEvent:
 		logger.Info("msg", "MessageEvent", "value", fmt.Sprintf("%v", e))
+	case *slack.RTMError:
+	case *slack.InvalidAuthEvent:
+	case *slack.DisconnectedEvent:
+		// TODO - Define my own error type so I can send to errors ch?
+		// See slack.RTMEvent and slack.RTMError
+		logger.Info("msg", "Some kind of error event received", "type", event.Type)
+	default:
+		logger.Debug("msg", "Unknown event received", "type", event.Type)
 	}
 }
 
-// Close shutdowns the bot cleanly by signaling other goroutines to stop.
+// Close announces other goroutines that we are leaving and waits for them.
 func (q *Qubot) Close() {
+	logger.Info("msg", "Shutting down Qubot")
 	close(q.shutdown)
-	close(q.Quit)
 	q.wg.Wait()
+	close(q.Quit)
+	logger.Info("msg", "Qubot was shut down successfully. ¡Adiós!")
 }

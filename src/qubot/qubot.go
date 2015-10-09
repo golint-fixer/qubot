@@ -1,7 +1,6 @@
 package qubot
 
 import (
-	"fmt"
 	"logger"
 	"sync"
 
@@ -16,6 +15,7 @@ type Qubot struct {
 	db     *DB
 	wg     sync.WaitGroup
 	client *slack.Client
+	rtm    *slack.RTM
 
 	// shutdown is a channel used to coordinate shutting down all the
 	// goroutines in this service cleanly.
@@ -28,6 +28,8 @@ type Qubot struct {
 	// Quit is a channel that we close when Qubot finishes. It is exported
 	// so others can tell when we quit.
 	Quit chan struct{}
+
+	handlers []Handler
 }
 
 // New starts a new instance of Qubot and returns it. It doesn't block but move
@@ -47,9 +49,32 @@ func New(config *config.Config) (*Qubot, error) {
 		Quit:     make(chan struct{}),
 	}
 
+	q.Handle(
+		PingHandler,
+		TauntHandler,
+		RedmineHandler,
+	)
+
 	q.start()
 
 	return &q, nil
+}
+
+// Handle registers a new handlers with Qubot
+func (q *Qubot) Handle(handlers ...interface{}) {
+	for _, h := range handlers {
+		nh, err := NewHandler(h)
+		if err != nil {
+			logger.Crit("msg", "Handle coult not be registered", "error", err)
+			panic(err)
+		}
+		q.handlers = append(q.handlers, nh)
+	}
+}
+
+// Handlers returns the robot's handlers
+func (q *Qubot) Handlers() []Handler {
+	return q.handlers
 }
 
 func (q *Qubot) start() {
@@ -88,23 +113,38 @@ func (q *Qubot) start() {
 
 		defer q.wg.Done()
 
-		rtm := client.NewRTM()
-		go rtm.ManageConnection()
+		q.rtm = client.NewRTM()
+		go q.rtm.ManageConnection()
 
 		for {
 			select {
-			case event := <-rtm.IncomingEvents:
+			case event := <-q.rtm.IncomingEvents:
 				// Process the incoming event in a new goroutine
 				// so we can keep listening.
 				q.wg.Add(1)
 				go q.processIncomingEvent(&event)
 			case <-q.shutdown:
 				logger.Info("msg", "Disconnecting from Slack RTM")
-				rtm.Disconnect()
+				q.rtm.Disconnect()
 				return
 			}
 		}
 	}()
+}
+
+// receive takes the Slack message to all the handlers registered.
+func (q *Qubot) receive(msg *slack.Msg) error {
+	resp := &Response{
+		Qubot: q,
+		Msg:   msg,
+	}
+	for _, h := range q.handlers {
+		err := h.Handle(resp)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // processIncomingEvent processes incoming events from the real time API. We are
@@ -118,7 +158,7 @@ func (q *Qubot) processIncomingEvent(event *slack.RTMEvent) {
 	case *slack.ConnectedEvent:
 		logger.Info("msg", "Connected!")
 	case *slack.MessageEvent:
-		logger.Info("msg", "MessageEvent", "value", fmt.Sprintf("%v", e))
+		_ = q.receive(&e.Msg)
 	case *slack.RTMError:
 	case *slack.InvalidAuthEvent:
 	case *slack.DisconnectedEvent:

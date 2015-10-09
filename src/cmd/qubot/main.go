@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
 
 	"app"
 	"config"
+	"handlers"
 	"logger"
 	"qubot"
 )
@@ -26,35 +28,54 @@ func init() {
 func main() {
 	flag.Parse()
 
+	v := appVersion()
 	if version {
-		printVersion()
+		fmt.Println(v)
 		os.Exit(0)
 	}
+	logger.Info("main", v)
 
 	cfg, err := loadConfig()
 	if err != nil {
-		logger.Error("msg", "The configuration could not be loaded", "error", err, "path", conf)
+		logger.Error("main", "The configuration could not be loaded", "error", err, "path", conf)
 		os.Exit(1)
 	}
 
 	// Start service
-	qubot, err := qubot.New(cfg)
+	q := qubot.Init(cfg)
+	q.Handle(handlers.PingHandler, handlers.TauntHandler)
+	err = q.Start()
 	if err != nil {
-		logger.Error("msg", "Qubot could not be started", "error", err)
+		logger.Error("main", "Qubot could not be started", "error", err)
+		q.Close()
 		os.Exit(1)
 	}
 
+	// More advanced management on signals here: https://goo.gl/fuylKX
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
+	signal.Notify(sigChan,
+		syscall.SIGINT, // aka os.Interrupt
+		syscall.SIGTERM,
+		syscall.SIGUSR1)
+
+SELECT:
 	select {
-	case <-sigChan:
-		qubot.Close()
-	case <-qubot.Quit:
-		logger.Info("msg", "Qubot stopped unexpectedly")
+	case sig := <-sigChan:
+		switch sig {
+		case syscall.SIGINT, syscall.SIGTERM:
+			q.Close()
+		case syscall.SIGUSR1:
+			q.Report()
+			goto SELECT
+		}
+	case <-q.Done():
+		logger.Info("main", "Qubot stopped")
 	}
+
+	logger.Info("main", "¡Adiós!")
 }
 
-func loadConfig() (*config.Config, error) {
+func loadConfig() (*qubot.Config, error) {
 	cfg := config.DefaultConfig
 
 	if conf == "" {
@@ -69,13 +90,13 @@ func loadConfig() (*config.Config, error) {
 		if err != nil {
 			return nil, err
 		}
-		logger.Debug("msg", "Using config file", "path", conf)
+		logger.Info("main", "Using config file", "path", conf)
 	}
 
-	return cfg, nil
+	return cfg, config.Validate(cfg)
 }
 
-func printVersion() {
+func appVersion() string {
 	var versionString bytes.Buffer
 
 	fmt.Fprintf(&versionString, "%s v%s", app.Name, app.Version)
@@ -85,7 +106,6 @@ func printVersion() {
 			fmt.Fprintf(&versionString, " (%s)", app.Revision)
 		}
 	}
-	fmt.Fprintf(&versionString, "\n")
 
-	fmt.Printf(versionString.String())
+	return versionString.String()
 }

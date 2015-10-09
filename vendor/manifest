@@ -24,7 +24,7 @@
 		{
 			"importpath": "github.com/apache/thrift/lib/go/thrift",
 			"repository": "https://github.com/apache/thrift",
-			"revision": "a8d5a7841d42a9d663bc7fb2379500597a7d5020",
+			"revision": "a175437f66fa1a0b36233e7dd40b061d471276ff",
 			"branch": "master",
 			"path": "/lib/go/thrift"
 		},
@@ -38,7 +38,7 @@
 		{
 			"importpath": "github.com/boltdb/bolt",
 			"repository": "https://github.com/boltdb/bolt",
-			"revision": "51f99c862475898df9773747d3accd05a7ca33c1",
+			"revision": "14ea02b7ee56ea0440b8e42b333934fdf623f214",
 			"branch": "master"
 		},
 		{
@@ -57,27 +57,27 @@
 		{
 			"importpath": "github.com/go-kit/kit",
 			"repository": "https://github.com/go-kit/kit",
-			"revision": "069a0f8cf7ee45345296db0b153a0b9c7decb6b3",
+			"revision": "5b0f592d2213a65d3f711e30ccbd9ff8b8971586",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/go-kit/kit/examples/addsvc/_thrift/gen-go/add",
 			"repository": "https://github.com/go-kit/kit",
-			"revision": "069a0f8cf7ee45345296db0b153a0b9c7decb6b3",
+			"revision": "5b0f592d2213a65d3f711e30ccbd9ff8b8971586",
 			"branch": "master",
 			"path": "/examples/addsvc/_thrift/gen-go/add"
 		},
 		{
 			"importpath": "github.com/go-kit/kit/tracing/zipkin/_thrift/gen-go/scribe",
 			"repository": "https://github.com/go-kit/kit",
-			"revision": "069a0f8cf7ee45345296db0b153a0b9c7decb6b3",
+			"revision": "5b0f592d2213a65d3f711e30ccbd9ff8b8971586",
 			"branch": "master",
 			"path": "/tracing/zipkin/_thrift/gen-go/scribe"
 		},
 		{
 			"importpath": "github.com/go-kit/kit/tracing/zipkin/_thrift/gen-go/zipkincore",
 			"repository": "https://github.com/go-kit/kit",
-			"revision": "069a0f8cf7ee45345296db0b153a0b9c7decb6b3",
+			"revision": "5b0f592d2213a65d3f711e30ccbd9ff8b8971586",
 			"branch": "master",
 			"path": "/tracing/zipkin/_thrift/gen-go/zipkincore"
 		},
@@ -128,13 +128,13 @@
 		{
 			"importpath": "github.com/nlopes/slack",
 			"repository": "https://github.com/nlopes/slack",
-			"revision": "aaf55856f05a90dac5b934d489d6c3d14e8602a6",
+			"revision": "4a9ff5f6ed8bb0df51620f49ee90fc0858a2913e",
 			"branch": "master"
 		},
 		{
 			"importpath": "github.com/prometheus/client_golang/prometheus",
 			"repository": "https://github.com/prometheus/client_golang",
-			"revision": "b6cad5edaf0b3c84797ebeedfb590cbc540382e8",
+			"revision": "e51041b3fa41cece0dca035740ba6411905be473",
 			"branch": "master",
 			"path": "/prometheus"
 		},
@@ -148,14 +148,14 @@
 		{
 			"importpath": "github.com/prometheus/common/expfmt",
 			"repository": "https://github.com/prometheus/common",
-			"revision": "4d7c04b78eef095ca6c8adbad248fb848ee552b8",
+			"revision": "1cc3e4c3b28fd42633a8c389c98cfbadf42621b1",
 			"branch": "master",
 			"path": "/expfmt"
 		},
 		{
 			"importpath": "github.com/prometheus/common/model",
 			"repository": "https://github.com/prometheus/common",
-			"revision": "4d7c04b78eef095ca6c8adbad248fb848ee552b8",
+			"revision": "1cc3e4c3b28fd42633a8c389c98cfbadf42621b1",
 			"branch": "master",
 			"path": "/model"
 		},
@@ -181,49 +181,49 @@
 		{
 			"importpath": "github.com/ugorji/go/codec",
 			"repository": "https://github.com/ugorji/go",
-			"revision": "2cb41eb350bb803298e42218d78a525daca640a5",
+			"revision": "45ce7596ace4534e47b69051a92aef7b64ec7b3f",
 			"branch": "master",
 			"path": "/codec"
 		},
 		{
 			"importpath": "golang.org/x/net/context",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "01256db42e5106196a3473ec1620727a383500e8",
+			"revision": "29704b8f8f57fa48a0d8237fc20ed7c6744b86b1",
 			"branch": "master",
 			"path": "/context"
 		},
 		{
 			"importpath": "golang.org/x/net/http2",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "01256db42e5106196a3473ec1620727a383500e8",
+			"revision": "29704b8f8f57fa48a0d8237fc20ed7c6744b86b1",
 			"branch": "master",
 			"path": "/http2"
 		},
 		{
 			"importpath": "golang.org/x/net/internal/timeseries",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "01256db42e5106196a3473ec1620727a383500e8",
+			"revision": "29704b8f8f57fa48a0d8237fc20ed7c6744b86b1",
 			"branch": "master",
 			"path": "/internal/timeseries"
 		},
 		{
 			"importpath": "golang.org/x/net/trace",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "01256db42e5106196a3473ec1620727a383500e8",
+			"revision": "29704b8f8f57fa48a0d8237fc20ed7c6744b86b1",
 			"branch": "master",
 			"path": "/trace"
 		},
 		{
 			"importpath": "golang.org/x/net/websocket",
 			"repository": "https://go.googlesource.com/net",
-			"revision": "01256db42e5106196a3473ec1620727a383500e8",
+			"revision": "29704b8f8f57fa48a0d8237fc20ed7c6744b86b1",
 			"branch": "master",
 			"path": "/websocket"
 		},
 		{
 			"importpath": "google.golang.org/grpc",
 			"repository": "https://github.com/grpc/grpc-go",
-			"revision": "3e7b7e58f491074e9577050058fb95d2351a60b0",
+			"revision": "f7d1653e300d6ad9f019bce7a5f5ab3b4821f637",
 			"branch": "master"
 		},
 		{

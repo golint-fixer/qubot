@@ -3,11 +3,13 @@ package config
 import (
 	"fmt"
 
+	"qubot"
+
 	multierror "github.com/hashicorp/go-multierror"
 )
 
 // Validate the confifugration file
-func (c *Config) Validate() error {
+func Validate(c *qubot.Config) error {
 	var result error
 
 	if c.Database == nil {

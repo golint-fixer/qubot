@@ -14,17 +14,24 @@ type JSONTimeString string
 
 // String converts the unix timestamp into a string
 func (t JSONTimeString) String() string {
-	if t == "" {
+	tm := t.Time()
+	if tm.IsZero() {
 		return ""
+	}
+	return fmt.Sprintf("\"%s\"", tm.Format("Mon Jan _2"))
+}
+
+// Time converts the timestamp string to time.Time
+func (t JSONTimeString) Time() time.Time {
+	if t == "" {
+		return time.Time{}
 	}
 	floatN, err := strconv.ParseFloat(string(t), 64)
 	if err != nil {
-		log.Panicln(err)
-		return ""
+		log.Println("ERROR parsing a JSONTimeString!", err)
+		return time.Time{}
 	}
-	timeStr := int64(floatN)
-	tm := time.Unix(int64(timeStr), 0)
-	return fmt.Sprintf("\"%s\"", tm.Format("Mon Jan _2"))
+	return time.Unix(int64(floatN), 0)
 }
 
 var portMapping = map[string]string{"ws": "80", "wss": "443"}

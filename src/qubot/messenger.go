@@ -5,13 +5,21 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/net/context"
+
 	"github.com/Workiva/go-datastructures/queue"
 	"github.com/juju/ratelimit"
 	"github.com/nlopes/slack"
 )
 
-const rateLimit = 1.0
-const pollWaitTime = 500 * time.Millisecond
+const msnRateLimit = 1.0
+const msnPollWaitTime = 500 * time.Millisecond
+
+// Messenger interface
+type Messenger interface {
+	Send(msg *slack.OutgoingMessage) error
+	Close()
+}
 
 // Messenger posts Qubot's messages to Slack respecting their API rate limit
 // policy (see https://api.slack.com/docs/rate-limits for more details). We are
@@ -23,34 +31,26 @@ const pollWaitTime = 500 * time.Millisecond
 //
 // TODO: allow bursts
 // TODO: group messages
-type Messenger struct {
-	// rtm is the real-time websocket.
+type messenger struct {
+	ctx context.Context
+	wg  sync.WaitGroup
 	rtm *slack.RTM
-
-	// shutdown is a channel used to coordinate shutting down all the
-	// goroutines in this object cleanly.
-	shutdown chan struct{}
-
-	// wg helps us to wait for the different channel goroutines.
-	wg sync.WaitGroup
-
-	// chq holds the channel queues
 	chq *chqueue
 }
 
-// NewMessenger returns a new Messenger object.
-func NewMessenger(rtm *slack.RTM) *Messenger {
-	m := Messenger{
-		rtm:      rtm,
-		shutdown: make(chan struct{}),
-		chq:      &chqueue{q: make(map[string]*queue.Queue)},
+// InitMessenger returns a new Messenger object.
+func InitMessenger(ctx context.Context, rtm *slack.RTM) Messenger {
+	m := messenger{
+		ctx: ctx,
+		rtm: rtm,
+		chq: &chqueue{q: make(map[string]*queue.Queue)},
 	}
 
 	return &m
 }
 
 // Send puts the message in its corresponding queue.
-func (m *Messenger) Send(msg *slack.OutgoingMessage) error {
+func (m *messenger) Send(msg *slack.OutgoingMessage) error {
 	q, new, err := m.chq.add(msg)
 	if err != nil || !new {
 		return err
@@ -59,7 +59,11 @@ func (m *Messenger) Send(msg *slack.OutgoingMessage) error {
 	// When the queue is new we start a goroutine that will be responsible
 	// of delivering the messages to its addressee.
 	if new {
-		m.startPoller(q)
+		m.wg.Add(1)
+		go func() {
+			defer m.wg.Done()
+			m.startPoller(q)
+		}()
 	}
 
 	return nil
@@ -67,36 +71,31 @@ func (m *Messenger) Send(msg *slack.OutgoingMessage) error {
 
 // startPoller creates a new goroutine for a channel.
 // TODO: confirm delivery or retry instead (circuitbreaker?)
-func (m *Messenger) startPoller(q *queue.Queue) {
-	logger.Debug("msg", "Starting new poller goroutine")
-	go func() {
-		m.wg.Add(1)
-		tb := ratelimit.NewBucketWithRate(rateLimit, 1)
-		for {
-			select {
-			case <-m.shutdown:
-				m.wg.Done()
-				return
-			default:
-				logger.Debug("msg", "Polling queue...")
-				res, err := q.Poll(1, pollWaitTime)
-				if err != nil {
-					if err != queue.ErrTimeout {
-						logger.Warn("Messenger.startPoller", "q.Poll error", "error", err)
-					}
-					continue
+func (m *messenger) startPoller(q *queue.Queue) {
+	logger.Debug("messenger", "Starting new poller goroutine")
+	tb := ratelimit.NewBucketWithRate(msnRateLimit, 1)
+	for {
+		select {
+		case <-m.ctx.Done():
+			logger.Debug("messenger", "Closing poller")
+			return
+		default:
+			res, err := q.Poll(1, msnPollWaitTime)
+			if err != nil {
+				if err != queue.ErrTimeout {
+					logger.Warn("messenger", "startPoller", "error", err)
 				}
-				msg := res[0].(*slack.OutgoingMessage)
-				m.rtm.SendMessage(msg)
-				tb.Wait(1) // and relax for a bit!
+				continue
 			}
+			msg := res[0].(*slack.OutgoingMessage)
+			m.rtm.SendMessage(msg)
+			tb.Wait(1) // and relax for a bit!
 		}
-	}()
+	}
 }
 
 // Close signals all the goroutines and waits until they are all done.
-func (m *Messenger) Close() {
-	close(m.shutdown)
+func (m *messenger) Close() {
 	m.wg.Wait()
 }
 

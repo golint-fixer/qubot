@@ -1,62 +1,70 @@
 package qubot
 
 import (
-	"fmt"
-	"io/ioutil"
-	"log"
-	"os"
-	"path/filepath"
-	"reflect"
-	"runtime"
 	"testing"
-	"time"
+
+	"testutil"
 )
 
-func init() {
-	log.SetFlags(0)
+var testConfig = &Config{
+	Database: &DatabaseConfig{
+		Location: "/tmp/db",
+	},
+	Slack: &SlackConfig{
+		Key: "12345",
+	},
+	Redmine: &RedmineConfig{
+		URL:           "http://foobar.com",
+		Key:           "12345",
+		User:          "foobar",
+		VerifyTLSCert: true,
+	},
 }
 
-// assert fails the test if the condition is false.
-func assert(tb testing.TB, condition bool, msg string, v ...interface{}) {
-	if !condition {
-		_, file, line, _ := runtime.Caller(1)
-		fmt.Printf("\033[31m%s:%d: "+msg+"\033[39m\n\n", append([]interface{}{filepath.Base(file), line}, v...)...)
-		tb.FailNow()
+// Ensure that Qubot does not block when it's started.
+func TestQubot_Start(t *testing.T) {
+	q := Init(testConfig)
+	done := make(chan struct{})
+	reached := false
+
+	go func() {
+		q.Start()
+		defer q.Close()
+		reached = true
+		close(done)
+	}()
+
+	select {
+	case <-q.ready:
+	case <-done:
+		testutil.Assert(t, reached == true, "reached should be true")
 	}
 }
 
-// ok fails the test if an err is not nil.
-func ok(tb testing.TB, err error) {
-	if err != nil {
-		_, file, line, _ := runtime.Caller(1)
-		fmt.Printf("\033[31m%s:%d: unexpected error: %s\033[39m\n\n", filepath.Base(file), line, err.Error())
-		tb.FailNow()
-	}
+// Ensure that handlers can be registered with Qubot.
+func TestQubot_Handle(t *testing.T) {
+	h := &testHandler{}
+	q := Init(testConfig)
+	testutil.Assert(t, len(q.handlers) == 0, "len(q.handlers) should be 0")
+	q.Handle(h)
+	testutil.Assert(t, len(q.handlers) == 1, "len(q.handlers) should be 1")
 }
 
-// equals fails the test if exp is not equal to act.
-func equals(tb testing.TB, exp, act interface{}) {
-	if !reflect.DeepEqual(exp, act) {
-		_, file, line, _ := runtime.Caller(1)
-		fmt.Printf("\033[31m%s:%d:\n\n\texp: %#v\n\n\tgot: %#v\033[39m\n\n", filepath.Base(file), line, exp, act)
-		tb.FailNow()
-	}
-}
+// Ensure that Qubot notifies external receivers when the service shuts down.
+func TestQubot_Done(t *testing.T) {
+	q := Init(testConfig)
+	done := make(chan struct{})
+	closed := false
 
-// tempfile returns the path to a non-existent file in the temp directory.
-func tempfile() string {
-	f, _ := ioutil.TempFile("", "raft-")
-	path := f.Name()
-	f.Close()
-	os.Remove(path)
-	return path
-}
+	go func() {
+		q.Start()
+		<-q.Done()
+		closed = true
+		close(done)
+	}()
 
-// parsetime parses an ISO8601 time string.
-func parsetime(s string) time.Time {
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		log.Fatalf("invalid time: %s", err)
-	}
-	return t
+	testutil.Assert(t, closed == false, "closed should be false")
+	q.Close()
+	<-done // block until the goroutine is done.
+	testutil.Assert(t, closed == true, "closed should be true")
 }

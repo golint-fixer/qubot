@@ -96,3 +96,10 @@ func i64tob(v int64) []byte {
 	binary.BigEndian.PutUint64(b, uint64(v))
 	return b
 }
+
+// User of the organization.
+type User struct {
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Email    string `json:"email"`
+}

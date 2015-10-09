@@ -155,6 +155,7 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
+	req.Header.Add("Content-Type", "application/json")
 	if c.key != "" {
 		req.Header.Add("X-Redmine-API-Key", c.key)
 	}

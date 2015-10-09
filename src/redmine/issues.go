@@ -43,14 +43,14 @@ type IssueListOptions struct {
 
 // List fetches all the issues in Redmine
 func (s *IssuesService) List(opt *IssueListOptions) ([]Issue, *Response, error) {
-	u := "issues"
+	u := "issues.json"
 	return s.listIssues(u, opt)
 }
 
 // ListByProject fetches the issues in the specified project for the
 // authenticated user.
 func (s *IssuesService) ListByProject(project string, opt *IssueListOptions) ([]Issue, *Response, error) {
-	u := fmt.Sprintf("projects/%v/issues", project)
+	u := fmt.Sprintf("projects/%v/issues.json", project)
 	return s.listIssues(u, opt)
 }
 
@@ -76,7 +76,7 @@ func (s *IssuesService) listIssues(u string, opt *IssueListOptions) ([]Issue, *R
 
 // Get a single issue.
 func (s *IssuesService) Get(number int) (*Issue, *Response, error) {
-	u := fmt.Sprintf("issues/%d", number)
+	u := fmt.Sprintf("issues/%d.json", number)
 	req, err := s.client.NewRequest("GET", u, nil)
 	if err != nil {
 		return nil, nil, err
@@ -93,7 +93,7 @@ func (s *IssuesService) Get(number int) (*Issue, *Response, error) {
 
 // Create a new issue.
 func (s *IssuesService) Create(issue *IssueRequest) (*Response, error) {
-	u := fmt.Sprintf("issues")
+	u := fmt.Sprintf("issues.json")
 	req, err := s.client.NewRequest("POST", u, issue)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (s *IssuesService) Create(issue *IssueRequest) (*Response, error) {
 
 // Edit an issue.
 func (s *IssuesService) Edit(number int, issue *IssueRequest) (*Response, error) {
-	u := fmt.Sprintf("issues/%d", number)
+	u := fmt.Sprintf("issues/%d.json", number)
 	req, err := s.client.NewRequest("PATCH", u, issue)
 	if err != nil {
 		return nil, err
@@ -125,7 +125,7 @@ func (s *IssuesService) Edit(number int, issue *IssueRequest) (*Response, error)
 
 // Delete an issue.
 func (s *IssuesService) Delete(number int) (*Response, error) {
-	u := fmt.Sprintf("issues/%d", number)
+	u := fmt.Sprintf("issues/%d.json", number)
 	req, err := s.client.NewRequest("DELETE", u, nil)
 	if err != nil {
 		return nil, err

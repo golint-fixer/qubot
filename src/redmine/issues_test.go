@@ -11,7 +11,7 @@ func TestIssuesService_List(t *testing.T) {
 	setup()
 	defer teardown()
 
-	mux.HandleFunc("/issues", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/issues.json", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "GET")
 		testFormValues(t, r, values{
 			"page":  "2",
@@ -65,7 +65,7 @@ func TestIssuesService_Get(t *testing.T) {
 	setup()
 	defer teardown()
 
-	mux.HandleFunc("/issues/1", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/issues/1.json", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "GET")
 		fmt.Fprint(w, `{ "issue": {
 			"id": 1,

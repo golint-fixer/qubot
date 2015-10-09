@@ -1,6 +1,7 @@
 package qubot
 
 import (
+	"fmt"
 	"logger"
 	"sync"
 
@@ -16,6 +17,7 @@ type Qubot struct {
 	wg     sync.WaitGroup
 	client *slack.Client
 	rtm    *slack.RTM
+	m      *Messenger
 
 	// shutdown is a channel used to coordinate shutting down all the
 	// goroutines in this service cleanly.
@@ -115,6 +117,7 @@ func (q *Qubot) start() {
 
 		q.rtm = client.NewRTM()
 		go q.rtm.ManageConnection()
+		q.m = NewMessenger(q.rtm)
 
 		for {
 			select {
@@ -140,6 +143,7 @@ func (q *Qubot) receive(msg *slack.Msg) error {
 	}
 	for _, h := range q.handlers {
 		err := h.Handle(resp)
+		logger.Debug("msg", fmt.Sprintf("Calling handler %v", h), "error?", err)
 		if err != nil {
 			return err
 		}
@@ -158,6 +162,7 @@ func (q *Qubot) processIncomingEvent(event *slack.RTMEvent) {
 	case *slack.ConnectedEvent:
 		logger.Info("msg", "Connected!")
 	case *slack.MessageEvent:
+		logger.Debug("msg", "Message received")
 		_ = q.receive(&e.Msg)
 	case *slack.RTMError:
 	case *slack.InvalidAuthEvent:

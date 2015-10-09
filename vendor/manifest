@@ -8,6 +8,13 @@
 			"branch": "default"
 		},
 		{
+			"importpath": "github.com/Workiva/go-datastructures/queue",
+			"repository": "https://github.com/Workiva/go-datastructures",
+			"revision": "98261e2df8978c0886c146721d97d7d842b2d21b",
+			"branch": "master",
+			"path": "/queue"
+		},
+		{
 			"importpath": "github.com/afex/hystrix-go/hystrix",
 			"repository": "https://github.com/afex/hystrix-go",
 			"revision": "9351b724be3950ef0ca82c53f817dcd33947e95e",

@@ -5,16 +5,21 @@ import (
 	"logger"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/nlopes/slack"
 	"golang.org/x/net/context"
 )
+
+var ignoreUserList = []string{"USLACKBOT"}
+var eventTimeout = time.Second * 10
 
 // Qubot at your service!
 type Qubot struct {
 	config   *Config
 	handlers []Handler
 	m        Messenger
+	db       *DB
 	client   *slack.Client
 	rtm      *slack.RTM
 
@@ -23,6 +28,9 @@ type Qubot struct {
 	wg     sync.WaitGroup
 	ready  chan struct{}
 	done   chan struct{}
+
+	me    *slack.User
+	users map[string]*slack.User
 }
 
 // Init creates the object and returns a pointer to it.
@@ -31,6 +39,7 @@ func Init(config *Config) *Qubot {
 		config: config,
 		ready:  make(chan struct{}),
 		done:   make(chan struct{}),
+		users:  make(map[string]*slack.User),
 	}
 	root := context.Background()
 	q.ctx, q.cancel = context.WithCancel(root)
@@ -53,6 +62,19 @@ func (q *Qubot) Start() error {
 		close(q.ready)
 	}()
 
+	// Open database
+	q.db = &DB{}
+	err := q.db.Open(q.config.Database.Location, 0600)
+	if err != nil {
+		return err
+	}
+
+	// Connect to Slack.
+	err = q.connect()
+	if err != nil {
+		return err
+	}
+
 	// Initialize all the listeners that has been registered.
 	for _, h := range q.handlers {
 		q.wg.Add(1)
@@ -63,12 +85,6 @@ func (q *Qubot) Start() error {
 				logger.Warn("qubot", fmt.Sprintf("Handler %s terminated", reflect.TypeOf(h)))
 			}
 		}(h)
-	}
-
-	// Connect to Slack.
-	err := q.connect()
-	if err != nil {
-		return err
 	}
 
 	// Start messenger.
@@ -102,22 +118,48 @@ func (q *Qubot) connect() error {
 	}
 	logger.Info("qubot", "Authentication request test succeeded", "url", resp.URL)
 
-	go q.rtm.ManageConnection()
+	q.wg.Add(1)
+	go func() {
+		defer q.wg.Done()
+		// ManageConnection will exit sometime after q.rtm.Disconnect()
+		q.rtm.ManageConnection()
+	}()
 
 	return err
 }
 
 // listenEvents starts a new goroutine for each event received.
 func (q *Qubot) listenEvents() {
+	var wg sync.WaitGroup
+	c := make(chan error, 1)
 	for {
 		select {
 		case event := <-q.rtm.IncomingEvents:
-			q.wg.Add(1)
+			wg.Add(2)
 			go func() {
-				defer q.wg.Done()
-				q.handleEvent(&event)
+				defer wg.Done()
+				go func() {
+					defer wg.Done()
+					defer func() {
+						if p := recover(); p != nil {
+							logger.Warn("qubot", "listenEvents", "Panic! Regained control.", p)
+						}
+					}()
+					c <- q.handleEvent(&event)
+				}()
+				// Await until one of the channels send.
+				select {
+				case <-c:
+				case <-time.After(eventTimeout):
+					return
+				}
 			}()
+		case err := <-c:
+			if err != nil {
+				logger.Warn("qubot", "listenEvents", "error", err)
+			}
 		case <-q.ctx.Done():
+			wg.Wait()
 			logger.Info("qubot", "Disconnecting from Slack RTM")
 			q.rtm.Disconnect()
 			return
@@ -125,32 +167,25 @@ func (q *Qubot) listenEvents() {
 	}
 }
 
-// handleEvents processes incoming events from Slack and route them where it's
-// needed, e.g. broadcast messages to the handlers or deal with errors.
+// handleEvents takes each type of event to its corresponding callback.
 // A full list of events can be found in the source code: https://goo.gl/ESCO4K.
-func (q *Qubot) handleEvent(event *slack.RTMEvent) {
+func (q *Qubot) handleEvent(event *slack.RTMEvent) error {
 	switch e := event.Data.(type) {
 	case *slack.ConnectingEvent:
 		logger.Debug("qubot", "Connection attempt", "count", e.Attempt)
 	case *slack.ConnectedEvent:
 		logger.Info("qubot", "Connected to Slack!")
+		return q.onConnectedEvent(e)
 	case *slack.HelloEvent:
 		logger.Info("qubot", "Slack sent greetings!")
 	case *slack.LatencyReport:
 		logger.Debug("qubot", "Latency report", "duration", e.Value)
 	case *slack.MessageEvent:
 		logger.Debug("qubot", "Message received")
-		// Broadcast messages to handlers
-		for _, h := range q.handlers {
-			r := NewResponse(&e.Msg)
-			m, ok := h.(HandlerMatcher)
-			if ok && !m.Match(r) {
-				continue
-			}
-			h.Handle(r)
-		}
-	case *slack.RTMError:
+		return q.onMessageEvent(e)
 	case *slack.InvalidAuthEvent:
+		panic("Unrecoverable error: InvalidAuthEvent")
+	case *slack.RTMError:
 	case *slack.AckErrorEvent:
 	case *slack.ConnectionErrorEvent:
 	case *slack.DisconnectedEvent:
@@ -159,17 +194,77 @@ func (q *Qubot) handleEvent(event *slack.RTMEvent) {
 	default:
 		logger.Debug("qubot", "Unknown event received", "type", event.Type)
 	}
+	return nil
 }
 
-// Report makes Qubot log some vitals about the service. Nothing serious here
-// yet.
+// onConnectedEvent retrieves information about the team and persist it.
+func (q *Qubot) onConnectedEvent(_ *slack.ConnectedEvent) error {
+	info := q.rtm.GetInfo()
+	for _, user := range info.Users {
+		if user.Name == q.config.Slack.Nickname {
+			q.me = &user
+			continue
+		}
+		for _, iu := range ignoreUserList {
+			if user.Name == iu || user.ID == iu {
+				continue
+			}
+		}
+		if user.IsBot { // and user.Deleted?
+			continue
+		}
+		q.users[user.ID] = &user
+
+		// Persist user to the database
+		err := q.db.Update(func(tx *Tx) error {
+			u, err := tx.User(user.ID)
+			if err != nil {
+				return err
+			}
+			if u != nil {
+				return nil
+			}
+			return tx.SaveUser(&User{
+				ID:       user.ID,
+				Name:     user.Name,
+				Email:    user.Profile.Email,
+				Creation: time.Now(),
+			})
+		})
+		if err != nil {
+			logger.Error("qubot", "...", "error", err)
+		}
+	}
+
+	logger.Info("qubot", fmt.Sprintf("%d users have been identified (not incluing me or slackbot)", len(q.users)))
+	return nil
+}
+
+// onMessageEvent broadcasts incoming messages to handlers. Each handler runs
+// in a separate goroutine.
+func (q *Qubot) onMessageEvent(e *slack.MessageEvent) error {
+	for _, h := range q.handlers {
+		msg := NewMessage(&e.Msg)
+		r := NewResponse(q.m)
+		m, ok := h.(HandlerMatcher)
+		if ok && !m.Match(r, msg) {
+			continue
+		}
+		h.Handle(r, msg)
+	}
+	return nil
+}
+
+// Report makes Qubot log some vitals about the service.
+// Nothing serious here yet.
 func (q *Qubot) Report() {
 	info := q.rtm.GetInfo()
 	logger.Info("qubot", "Status report", "team", fmt.Sprintf("[%s] %s (%s)", info.Team.ID, info.Team.Name, info.Team.Domain))
 }
 
 // Done returns a channel that will be closed when the service is totally done.
-// It's convenient if you want to wait until the service shuts down.
+// It's a convenience for external observers that wants to wait until the
+// service finishes.
 func (q *Qubot) Done() chan struct{} {
 	return q.done
 }

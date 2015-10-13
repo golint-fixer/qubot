@@ -2,6 +2,8 @@ package testutil
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -33,4 +35,13 @@ func Equals(tb testing.TB, exp, act interface{}) {
 		fmt.Printf("\033[31m%s:%d:\n\n\texp: %#v\n\n\tgot: %#v\033[39m\n\n", filepath.Base(file), line, exp, act)
 		tb.FailNow()
 	}
+}
+
+// Tempfile returns the path to a non-existent file in the temp directory.
+func Tempfile() string {
+	f, _ := ioutil.TempFile("", "raft-")
+	path := f.Name()
+	f.Close()
+	os.Remove(path)
+	return path
 }

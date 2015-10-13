@@ -23,6 +23,9 @@ func Validate(c *qubot.Config) error {
 	}
 
 	if c.Slack != nil {
+		if c.Slack.Nickname == "" {
+			result = multierror.Append(result, fmt.Errorf("slack: nickname is required"))
+		}
 		if c.Slack.Key == "" {
 			result = multierror.Append(result, fmt.Errorf("slack: key is required"))
 		}

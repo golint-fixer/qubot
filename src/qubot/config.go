@@ -14,7 +14,8 @@ type DatabaseConfig struct {
 
 // SlackConfig holds the configuration parameters to access Slack.
 type SlackConfig struct {
-	Key string
+	Nickname string
+	Key      string
 }
 
 // RedmineConfig is the configuration of Redmine.

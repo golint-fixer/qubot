@@ -10,10 +10,10 @@ import "golang.org/x/net/context"
 // context.Done().
 type Handler interface {
 	Start(context.Context) error
-	Handle(Response)
+	Handle(Response, *Message)
 }
 
 // A HandlerMatcher is implemented by handlers that want to avoid
 type HandlerMatcher interface {
-	Match(Response) bool
+	Match(Response, *Message) bool
 }

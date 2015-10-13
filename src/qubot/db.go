@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/boltdb/bolt"
 )
@@ -67,27 +68,27 @@ func (tx *Tx) SetMeta(key, value string) error {
 	return tx.meta().Put([]byte(key), []byte(value))
 }
 
-// User retrieves an user from the database by ID.
-func (tx *Tx) User(id int) (u *User, err error) {
-	if v := tx.users().Get(i64tob(int64(id))); v != nil {
+// User retrieves a user from the database by ID.
+func (tx *Tx) User(id string) (u *User, err error) {
+	if v := tx.users().Get([]byte(id)); v != nil {
 		err = json.Unmarshal(v, &u)
 	}
 	return
 }
 
-// SaveUser stores an user in the database.
+// SaveUser stores a user in the database.
 func (tx *Tx) SaveUser(u *User) error {
 	if u == nil {
 		panic("nil user")
 	}
-	if u.ID == 0 {
+	if u.ID == "" {
 		panic("user id required")
 	}
 	b, err := json.Marshal(u)
 	if err != nil {
 		return fmt.Errorf("marshal user: %s", err)
 	}
-	return tx.users().Put(i64tob(int64(u.ID)), b)
+	return tx.users().Put([]byte(u.ID), b)
 }
 
 // Converts an integer to a big-endian encoded byte slice.
@@ -99,7 +100,8 @@ func i64tob(v int64) []byte {
 
 // User of the organization.
 type User struct {
-	ID       int    `json:"id"`
-	Username string `json:"username"`
-	Email    string `json:"email"`
+	ID       string    `json:"id"`
+	Name     string    `json:"name"`
+	Email    string    `json:"email"`
+	Creation time.Time `json:"creation"`
 }

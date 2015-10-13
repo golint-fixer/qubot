@@ -36,6 +36,6 @@ func (h *tauntHandler) Start(ctx context.Context) error {
 	}
 }
 
-func (h *tauntHandler) Handle(r qubot.Response) {
+func (h *tauntHandler) Handle(r qubot.Response, msg *qubot.Message) {
 	logger.Debug("tauntHandler", "Received a message!")
 }

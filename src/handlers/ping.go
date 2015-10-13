@@ -36,6 +36,6 @@ func (h *pingHandler) Start(ctx context.Context) error {
 	}
 }
 
-func (h *pingHandler) Handle(r qubot.Response) {
+func (h *pingHandler) Handle(r qubot.Response, msg *qubot.Message) {
 	logger.Debug("pingHandler", "Received a message!")
 }

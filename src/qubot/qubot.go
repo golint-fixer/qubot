@@ -20,8 +20,8 @@ type Qubot struct {
 	handlers []Handler
 	m        Messenger
 	db       *DB
-	client   *slack.Client
-	rtm      *slack.RTM
+	client   slackClient
+	rtm      slackRTMClient
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -33,7 +33,7 @@ type Qubot struct {
 	users map[string]*slack.User
 }
 
-// Init creates the object and returns a pointer to it.
+// Init creates the Qubot object and returns a pointer to it.
 func Init(config *Config) *Qubot {
 	q := Qubot{
 		config: config,
@@ -41,8 +41,18 @@ func Init(config *Config) *Qubot {
 		done:   make(chan struct{}),
 		users:  make(map[string]*slack.User),
 	}
+	q.client = newSlackClient(config.Slack.Key)
+	q.rtm = q.client.NewRTM()
+
+	q.db = &DB{}
+	err := q.db.Open(q.config.Database.Location, 0600)
+	if err != nil {
+		panic(err)
+	}
+
 	root := context.Background()
 	q.ctx, q.cancel = context.WithCancel(root)
+
 	return &q
 }
 
@@ -62,15 +72,8 @@ func (q *Qubot) Start() error {
 		close(q.ready)
 	}()
 
-	// Open database
-	q.db = &DB{}
-	err := q.db.Open(q.config.Database.Location, 0600)
-	if err != nil {
-		return err
-	}
-
 	// Connect to Slack.
-	err = q.connect()
+	err := q.connect()
 	if err != nil {
 		return err
 	}
@@ -107,9 +110,6 @@ func (q *Qubot) Start() error {
 }
 
 func (q *Qubot) connect() error {
-	q.client = slack.New(q.config.Slack.Key)
-	q.rtm = q.client.NewRTM()
-
 	// Don't get too far until we validate our credentials.
 	resp, err := q.client.AuthTest()
 	if err != nil {
@@ -134,7 +134,7 @@ func (q *Qubot) listenEvents() {
 	c := make(chan error, 1)
 	for {
 		select {
-		case event := <-q.rtm.IncomingEvents:
+		case event := <-q.rtm.Events():
 			wg.Add(2)
 			go func() {
 				defer wg.Done()

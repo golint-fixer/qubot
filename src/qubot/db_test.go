@@ -4,9 +4,17 @@ import (
 	"log"
 	"os"
 	"testing"
+	"time"
 
 	"testutil"
 )
+
+var dbExampleUser = &User{
+	ID:       "U100",
+	Name:     "foo",
+	Email:    "foo@fighters.com",
+	Creation: time.Now(),
+}
 
 // Ensure that a database can be opened and closed.
 func TestDB_Open(t *testing.T) {
@@ -40,13 +48,13 @@ func TestTx_SaveUser(t *testing.T) {
 	defer db.Close()
 
 	testutil.Ok(t, db.Update(func(tx *Tx) error {
-		testutil.Ok(t, tx.SaveUser(&User{ID: "U100", Name: "foo", Email: "foo@fighers.com"}))
+		testutil.Ok(t, tx.SaveUser(dbExampleUser))
 		return nil
 	}))
 
 	testutil.Ok(t, db.View(func(tx *Tx) error {
 		u, _ := tx.User("U100")
-		testutil.Equals(t, &User{ID: "U100", Name: "foo", Email: "foo@fighers.com"}, u)
+		testutil.Equals(t, dbExampleUser, u)
 		return nil
 	}))
 }

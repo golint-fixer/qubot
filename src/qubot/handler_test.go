@@ -17,7 +17,7 @@ func (h *testHandler) Start(ctx context.Context) error {
 	}
 }
 
-func (h *testHandler) Handle(msg Message, r Response) {}
+func (h *testHandler) Handle(r Response, msg *Message) {}
 
 func (h *testHandler) Stop() {
 	close(h.done)

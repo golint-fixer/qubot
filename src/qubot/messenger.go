@@ -34,12 +34,12 @@ type Messenger interface {
 type messenger struct {
 	ctx context.Context
 	wg  sync.WaitGroup
-	rtm *slack.RTM
+	rtm slackRTMClient
 	chq *chqueue
 }
 
 // InitMessenger returns a new Messenger object.
-func InitMessenger(ctx context.Context, rtm *slack.RTM) Messenger {
+func InitMessenger(ctx context.Context, rtm slackRTMClient) Messenger {
 	m := messenger{
 		ctx: ctx,
 		rtm: rtm,

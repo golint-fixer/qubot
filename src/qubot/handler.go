@@ -1,6 +1,8 @@
 package qubot
 
-import "golang.org/x/net/context"
+import (
+	"golang.org/x/net/context"
+)
 
 // Handler is the interface that wraps the basic methods of Qubot handlers.
 //
@@ -13,7 +15,7 @@ type Handler interface {
 	Handle(Response, *Message)
 }
 
-// A HandlerMatcher is implemented by handlers that want to avoid
+// A HandlerMatcher is implemented by handlers that want to avoid.
 type HandlerMatcher interface {
 	Match(Response, *Message) bool
 }

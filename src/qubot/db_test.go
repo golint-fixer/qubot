@@ -13,7 +13,7 @@ var dbExampleUser = &User{
 	ID:       "U100",
 	Name:     "foo",
 	Email:    "foo@fighters.com",
-	Creation: time.Now(),
+	Creation: time.Now().UTC(),
 }
 
 // Ensure that a database can be opened and closed.

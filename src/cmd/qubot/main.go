@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
+	"time"
 
 	"app"
 	"config"
-	"handlers"
 	"logger"
 	"qubot"
 )
@@ -43,8 +44,7 @@ func main() {
 
 	// Start service
 	q := qubot.Init(cfg)
-	q.Handle(handlers.PingHandler, handlers.TauntHandler)
-	err = q.Start()
+	err = q.Run()
 	if err != nil {
 		logger.Error("main", "Qubot could not be started", "error", err)
 		q.Close()
@@ -52,26 +52,34 @@ func main() {
 	}
 
 	// More advanced management on signals here: https://goo.gl/fuylKX
+	var closeTime time.Time
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan,
-		syscall.SIGINT, // aka os.Interrupt
-		syscall.SIGTERM,
-		syscall.SIGUSR1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGUSR1)
+	logger.Info("main", "Listening for signals")
 
-SELECT:
-	select {
-	case sig := <-sigChan:
+	for sig := range sigChan {
 		switch sig {
 		case syscall.SIGINT, syscall.SIGTERM:
-			q.Close()
+			logger.Info("main", "Initializing clean shutdown...")
+			closeTime = time.Now()
+			go q.Close()
+			goto QUIT
 		case syscall.SIGUSR1:
 			q.Report()
-			goto SELECT
 		}
-	case <-q.Done():
-		logger.Info("main", "Qubot stopped")
 	}
 
+QUIT:
+	select {
+	case <-sigChan:
+		logger.Info("main", "Second signal received, initializing hard shutdown")
+	case <-time.After(time.Second * 10):
+		logger.Info("main", "Time limit reached, initializing hard shutdown")
+	case <-q.Closed:
+		logger.Info("main", "Shutdown completed", "took", time.Since(closeTime))
+	}
+
+	logger.Info("main", "Goroutines count", "count", runtime.NumGoroutine())
 	logger.Info("main", "¡Adiós!")
 }
 

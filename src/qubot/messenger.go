@@ -5,11 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/context"
-
 	"github.com/Workiva/go-datastructures/queue"
 	"github.com/juju/ratelimit"
-	"github.com/nlopes/slack"
 )
 
 const msnRateLimit = 1.0
@@ -17,7 +14,7 @@ const msnPollWaitTime = 500 * time.Millisecond
 
 // Messenger interface
 type Messenger interface {
-	Send(msg *slack.OutgoingMessage) error
+	Send(msg *OutgoingMessage) error
 	Close()
 }
 
@@ -32,25 +29,25 @@ type Messenger interface {
 // TODO: allow bursts
 // TODO: group messages
 type messenger struct {
-	ctx context.Context
-	wg  sync.WaitGroup
-	rtm slackRTMClient
-	chq *chqueue
+	wg       sync.WaitGroup
+	shutdown chan struct{}
+	adapter  adapter
+	chq      *chqueue
 }
 
 // InitMessenger returns a new Messenger object.
-func InitMessenger(ctx context.Context, rtm slackRTMClient) Messenger {
+func InitMessenger(adapter adapter) Messenger {
 	m := messenger{
-		ctx: ctx,
-		rtm: rtm,
-		chq: &chqueue{q: make(map[string]*queue.Queue)},
+		shutdown: make(chan struct{}),
+		adapter:  adapter,
+		chq:      &chqueue{q: make(map[string]*queue.Queue)},
 	}
 
 	return &m
 }
 
 // Send puts the message in its corresponding queue.
-func (m *messenger) Send(msg *slack.OutgoingMessage) error {
+func (m *messenger) Send(msg *OutgoingMessage) error {
 	q, new, err := m.chq.add(msg)
 	if err != nil || !new {
 		return err
@@ -76,7 +73,7 @@ func (m *messenger) startPoller(q *queue.Queue) {
 	tb := ratelimit.NewBucketWithRate(msnRateLimit, 1)
 	for {
 		select {
-		case <-m.ctx.Done():
+		case <-m.shutdown:
 			logger.Debug("messenger", "Closing poller")
 			return
 		default:
@@ -87,8 +84,8 @@ func (m *messenger) startPoller(q *queue.Queue) {
 				}
 				continue
 			}
-			msg := res[0].(*slack.OutgoingMessage)
-			m.rtm.SendMessage(msg)
+			msg := res[0].(*OutgoingMessage)
+			m.adapter.Send(msg)
 			tb.Wait(1) // and relax for a bit!
 		}
 	}
@@ -96,6 +93,7 @@ func (m *messenger) startPoller(q *queue.Queue) {
 
 // Close signals all the goroutines and waits until they are all done.
 func (m *messenger) Close() {
+	close(m.shutdown)
 	m.wg.Wait()
 }
 
@@ -110,8 +108,8 @@ type chqueue struct {
 // add outgoing message to the corresponding channel queue, returns a pointer
 // to the queue, a boolean where true means that the queue had to be created and
 // false otherwise and an error if the message could not be added to the queue.
-func (chq *chqueue) add(msg *slack.OutgoingMessage) (*queue.Queue, bool, error) {
-	q := chq.get(msg.Channel)
+func (chq *chqueue) add(msg *OutgoingMessage) (*queue.Queue, bool, error) {
+	q := chq.get(msg.channel)
 
 	created := false
 	if q == nil {
@@ -119,7 +117,7 @@ func (chq *chqueue) add(msg *slack.OutgoingMessage) (*queue.Queue, bool, error) 
 		created = true
 
 		chq.mux.Lock()
-		chq.q[msg.Channel] = q
+		chq.q[msg.channel] = q
 		chq.mux.Unlock()
 	}
 

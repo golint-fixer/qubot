@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -22,6 +23,9 @@ type Client struct {
 	// HTTP client used to communicate with the API.
 	client *http.Client
 
+	// Redmine API key passed via the X-Redmine-API-Key header.
+	key string
+
 	// Base URL for API requests. BaseURL should always be specified with a
 	// trailing slash.
 	BaseURL *url.URL
@@ -33,6 +37,44 @@ type Client struct {
 	Issues *IssuesService
 }
 
+// Pager populates the page values in the Response by looking at the API
+// pagination attributes such TotalCount, Offset and Limit.
+type Pager interface {
+	populateValues(*Response)
+}
+
+// Pagination is our Pager implementor that also helps to decode the pagination
+// attributes from the API response. The client will make use of it when it is
+// embedded within other types, e.g. IssuesResult.
+type Pagination struct {
+	TotalCount int `json:"total_count,omitempty"`
+	Offset     int `json:"offset,omitempty"`
+	Limit      int `json:"limit,omitempty"`
+}
+
+func (p *Pagination) populateValues(r *Response) {
+	if p.Limit == 0 {
+		return
+	}
+	var (
+		page = p.Offset/p.Limit + 1
+		last = int(math.Ceil(float64(p.TotalCount) / float64(p.Limit)))
+	)
+
+	r.NextPage = page + 1
+	if page >= last {
+		r.NextPage = last
+	}
+
+	r.PrevPage = page - 1
+	if page < 2 {
+		r.PrevPage = 1
+	}
+
+	r.FirstPage = 1
+	r.LastPage = last
+}
+
 // ListOptions specifies the optional parameters to various List methods that
 // support pagination.
 type ListOptions struct {
@@ -40,7 +82,7 @@ type ListOptions struct {
 	Page int `url:"page,omitempty"`
 
 	// For paginated result sets, the number of results to include per page.
-	PerPage int `url:"per_page,omitempty"`
+	PerPage int `url:"limit,omitempty"`
 }
 
 // addOptions adds the parameters in opt as URL query parameters to s. opt must
@@ -69,15 +111,16 @@ func addOptions(s string, opt interface{}) (string, error) {
 // provided, http.DefaultClient will be used.  To use API methods which require
 // authentication, provide an http.Client that will perform the authentication
 // for you (such as that provided by the golang.org/x/oauth2 library).
-func NewClient(httpClient *http.Client, baseUrl string) *Client {
+func NewClient(httpClient *http.Client, BaseURL string, Key string) *Client {
 	if httpClient == nil {
 		httpClient = http.DefaultClient
 	}
 
-	u, _ := url.Parse(baseUrl)
+	u, _ := url.Parse(BaseURL)
 
 	c := &Client{
 		client:    httpClient,
+		key:       Key,
 		BaseURL:   u,
 		UserAgent: userAgent,
 	}
@@ -112,6 +155,9 @@ func (c *Client) NewRequest(method, urlStr string, body interface{}) (*http.Requ
 		return nil, err
 	}
 
+	if c.key != "" {
+		req.Header.Add("X-Redmine-API-Key", c.key)
+	}
 	if c.UserAgent != "" {
 		req.Header.Add("User-Agent", c.UserAgent)
 	}
@@ -137,13 +183,7 @@ type Response struct {
 
 // newResponse creates a new Response for the provided http.Response.
 func newResponse(r *http.Response) *Response {
-	response := &Response{Response: r}
-	response.populatePageValues()
-	return response
-}
-
-// populatePageValues parses ...
-func (r *Response) populatePageValues() {
+	return &Response{Response: r}
 }
 
 // Do sends an API request and returns the API response. The API response is
@@ -175,6 +215,11 @@ func (c *Client) Do(req *http.Request, v interface{}) (*Response, error) {
 			err = json.NewDecoder(resp.Body).Decode(v)
 		}
 	}
+
+	if pager, ok := v.(Pager); ok {
+		pager.populateValues(response)
+	}
+
 	return response, err
 }
 

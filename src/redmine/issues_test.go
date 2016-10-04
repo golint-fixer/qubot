@@ -13,36 +13,51 @@ func TestIssuesService_List(t *testing.T) {
 
 	mux.HandleFunc("/issues", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "GET")
+		testFormValues(t, r, values{
+			"page":  "2",
+			"limit": "2",
+		})
 		fmt.Fprint(w, `{
-                "issues": [{
-                    "id": 1,
-                    "subject": "Foobar is badly broken",
-                    "description": "According to one of our users, Foobar does not work!"
-                }, {
-                    "id": 2,
-                    "subject": "Foobar is not compatible with humans",
-                    "description": "This tool lacks a user interface."
-                }]
+		"issues": [{
+			"id": 3,
+			"subject": "Foobar is badly broken",
+			"description": "According to one of our users, Foobar does not work!"
+		}, {
+			"id": 4,
+			"subject": "Foobar is not compatible with humans",
+			"description": "This tool lacks a user interface."
+		}],
+		"total_count": 4,
+		"offset": 2,
+		"limit": 2
             }
         }`)
 	})
 
-	issue, _, err := client.Issues.List(&IssueListOptions{})
+	issues, resp, err := client.Issues.List(&IssueListOptions{
+		ListOptions{Page: 2, PerPage: 2},
+	})
 	if err != nil {
 		t.Errorf("Issues.List returned error: %v", err)
 	}
 
 	want := []Issue{{
-		Number:      Int(1),
+		Number:      Int(3),
 		Subject:     String("Foobar is badly broken"),
 		Description: String("According to one of our users, Foobar does not work!"),
 	}, {
-		Number:      Int(2),
+		Number:      Int(4),
 		Subject:     String("Foobar is not compatible with humans"),
 		Description: String("This tool lacks a user interface."),
 	}}
-	if !reflect.DeepEqual(issue, want) {
-		t.Errorf("Issues.Get returned %+v, want %+v", issue, want)
+	if !reflect.DeepEqual(issues, want) {
+		t.Errorf("Issues.Get returned %+v, want %+v", issues, want)
+	}
+
+	pwant := []int{2, 1, 1, 2}
+	pgot := []int{resp.NextPage, resp.PrevPage, resp.FirstPage, resp.LastPage}
+	if !reflect.DeepEqual(pgot, pwant) {
+		t.Errorf("Issues.List returned %+v, want %+v", pgot, pwant)
 	}
 }
 
@@ -52,14 +67,11 @@ func TestIssuesService_Get(t *testing.T) {
 
 	mux.HandleFunc("/issues/1", func(w http.ResponseWriter, r *http.Request) {
 		testMethod(t, r, "GET")
-		fmt.Fprint(w, `{
-                "issue": {
-                    "id": 1,
-                    "subject": "Foobar is badly broken",
-                    "description": "According to one of our users, Foobar does not work!"
-                }
-            }
-        }`)
+		fmt.Fprint(w, `{ "issue": {
+			"id": 1,
+			"subject": "Foobar is badly broken",
+			"description": "According to one of our users, Foobar does not work!"
+		}}`)
 	})
 
 	issue, _, err := client.Issues.Get(1)

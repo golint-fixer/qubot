@@ -18,9 +18,10 @@ type IssueResult struct {
 // IssuesResult represents a Redmine document with more than one issue.
 type IssuesResult struct {
 	Issues []Issue `json:"issues"`
+	*Pagination
 }
 
-// Issue represents a Redmine issue on a repository.
+// Issue represents a Redmine issue.
 type Issue struct {
 	Number      *int    `json:"id,omitempty"`
 	Subject     *string `json:"subject,omitempty"`
